@@ -79,8 +79,7 @@ if __name__ == "__main__":
         args.output_gif_path = args.input_gif_path.split('.gif')[0] + '_res.gif'
 
     gif_info = analyze_gif(args.input_gif_path)
-    # print(gif_info)
-    
+
     split_gif_to_images(gif_info['gif'], args)
     add_bar_and_merge_to_gif(gif_info, args)
     
@@ -91,21 +90,26 @@ if __name__ == "__main__":
     )
     optimize = input()
     if optimize == "Y":
-        # https://imageio.readthedocs.io/en/stable/examples.html#optimizing-a-gif-using-pygifsicle
-        from pygifsicle import optimize
-        os.environ["gifsicle"] = "gifsicle.exe"
-        # print("What is your expected size? [in KB]")
-        # expected_size = float(input())
-        optimize(args.output_gif_path)
-        opt_out_gif_info = analyze_gif(args.output_gif_path)
-        print(" - optimize done! the optimzed size is {} KB, which is {} smaller.".format(
-            opt_out_gif_info['file_size'], round(opt_out_gif_info['file_size'] / out_gif_info['file_size'], 2))
-        )
+        print("What is your expected size? [in KB]")
+        expected_size = float(input())
         
-        
-        
-    
-    
-    
-    
-    
+        tmp_gif_path = args.output_gif_path.split('.gif')[0] + '_tmp.gif'
+        lossiness = 20
+        while True:
+            os.system("gifsicle.exe -O3 --lossy={} {} -o {}".format(
+                lossiness,
+                args.output_gif_path, tmp_gif_path
+            ))
+            
+            optimized_size = analyze_gif(tmp_gif_path)['file_size']
+            print("Try optimize level = 3, lossiness = {}, get optimized size {}".format(
+                lossiness, optimized_size
+            ))
+            if optimized_size <= expected_size:
+                shutil.move(tmp_gif_path, args.output_gif_path)
+                print("Done! try optimize level = 3, lossiness = {}, get optimized size {}".format(
+                    lossiness, optimized_size
+                ))
+                break
+                
+            lossiness += 10
