@@ -86,7 +86,7 @@ def parse_args():
     parser.add_argument('--output_gif_path', '-o', default=None, help='the path to output gif file')
     parser.add_argument('--bar_height_ratio', '-ratio', type=float, default=1/20, help='the ratio of progress bar height vs. gif image height')
     parser.add_argument('--bar_color', '-color',  default=(0, 0, 255), help='the color of progress bar')
-    parser.add_argument('--tmp_frame_dir', '-tmp', type=str, default='tmp_frame_dir', help='the color of progress bar')
+    parser.add_argument('--tmp_frame_dir', '-tmp', type=str, default='tmp_frame_dir', help='the temporary directory to save immediate images')
     
     args = parser.parse_args()
     
@@ -109,6 +109,8 @@ if __name__ == "__main__":
     )
     optimize = input()
     if optimize == "Y":
+        config_gifsicle()
+        
         print("What is your expected size? [in KB]")
         expected_size = float(input())
         
@@ -116,8 +118,6 @@ if __name__ == "__main__":
         lossiness = 20
         while True:
             # https://www.lcdf.org/gifsicle/man.html
-            config_gifsicle()
-
             if platform.system() == "Windows":
                 # prebuilt `gifsicle.exe` for Windows ha been ported in this repo
                 os.system("gifsicle.exe -O3 --lossy={} {} -o {}".format(
@@ -133,12 +133,12 @@ if __name__ == "__main__":
                 raise RuntimeError("{} is not supported platform in this version.".format(platform.system()))
             
             optimized_size = analyze_gif(tmp_gif_path)['file_size']
-            print("Try optimize level = 3, lossiness = {}, get optimized size {}".format(
+            print("Try optimize level = 3, lossiness = {}, get optimized size {} KB".format(
                 lossiness, optimized_size
             ))
             if optimized_size <= expected_size:
                 shutil.move(tmp_gif_path, args.output_gif_path)
-                print("Done! try optimize level = 3, lossiness = {}, get optimized size {}".format(
+                print("Done! try optimize level = 3, lossiness = {}, get optimized size {} KB".format(
                     lossiness, optimized_size
                 ))
                 break
