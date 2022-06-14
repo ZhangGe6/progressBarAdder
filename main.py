@@ -1,6 +1,7 @@
 # God knows I will use all of PIL, imageio and cv2 ...
 
 import os
+import platform
 import argparse
 import shutil
 import cv2
@@ -57,9 +58,27 @@ def add_bar_and_merge_to_gif(gif_info, args):
     imageio.mimsave(args.output_gif_path, frames, fps=gif_info['avg_fps'])
     shutil.rmtree(args.tmp_frame_dir)
 
-def optimize_gif(gif_path, expected_size):
-    
-    pass
+
+def config_gifsicle():
+    if platform.system() == "Windows":
+        # gifsicle.exe should be ported in this repo
+        # otherwise it can be downloaded from https://eternallybored.org/misc/gifsicle/
+        assert os.path.exists( "./gifsicle.exe")
+    elif platform.system() == "Linux":
+        # giflossy: https://github.com/kornelski/giflossy is merged to gifsicle in version 1.92
+        # see gifsicle update log: https://github.com/kohler/gifsicle/blob/master/NEWS.md#version-192--18apr2019
+        # However, Ubuntu 18 can only install 1.91 by apt-get
+        # check it by: `apt-cache policy gifsicle` : https://askubuntu.com/questions/428772/how-to-install-specific-version-of-some-package
+        # so we have to manually install giflossy (install reference: https://github.com/kornelski/giflossy/blob/master/INSTALL)
+        # (and Ubuntu 20 install 1.92 by default andd can enjoy giflossy by only installing gifsicle. check here: https://superuser.com/a/1619955)
+        release_info = os.popen("more /etc/lsb-release").read()
+        dist = release_info.split("\n")[1].split("=")[1]
+        print(dist)
+        if int(dist.split(".")[0]) >= 20:
+            os.system("sudo apt-install gifsicle")
+        else:
+            # I tried install giflossy manually, but the ./configure file can not work in my case
+            raise RuntimeError("Unsupported Linux distribution for this version")
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -96,10 +115,22 @@ if __name__ == "__main__":
         tmp_gif_path = args.output_gif_path.split('.gif')[0] + '_tmp.gif'
         lossiness = 20
         while True:
-            os.system("gifsicle.exe -O3 --lossy={} {} -o {}".format(
-                lossiness,
-                args.output_gif_path, tmp_gif_path
-            ))
+            # https://www.lcdf.org/gifsicle/man.html
+            config_gifsicle()
+
+            if platform.system() == "Windows":
+                # prebuilt `gifsicle.exe` for Windows ha been ported in this repo
+                os.system("gifsicle.exe -O3 --lossy={} {} -o {}".format(
+                    lossiness,
+                    args.output_gif_path, tmp_gif_path
+                ))
+            elif platform.system() == "Linux":
+                os.system("gifsicle -O3 --lossy={} {} -j4 -o {}".format(
+                    lossiness,
+                    args.output_gif_path, tmp_gif_path
+                ))
+            else:
+                raise RuntimeError("{} is not supported platform in this version.".format(platform.system()))
             
             optimized_size = analyze_gif(tmp_gif_path)['file_size']
             print("Try optimize level = 3, lossiness = {}, get optimized size {}".format(
