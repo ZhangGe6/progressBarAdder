@@ -1,24 +1,33 @@
 # God knows I will use all of PIL.Image, imageio and cv2 ...
 
 import os
+import sys
 import argparse
 import shutil
 import cv2
 from PIL import Image, ImageSequence
 import imageio
 
+
 # https://stackoverflow.com/a/53365469/10096987
-def analyze_gif(PIL_Image_object):
-    """ Returns the average framerate of a PIL Image object """
-    PIL_Image_object.seek(0)
+def analyze_gif(gif_path):
+    gif = Image.open(gif_path)
+    
+    gif.seek(0)
     frame_num = duration = 0
     while True:
         try:
             frame_num += 1
-            duration += PIL_Image_object.info['duration']
-            PIL_Image_object.seek(PIL_Image_object.tell() + 1)
+            duration += gif.info['duration']
+            gif.seek(gif.tell() + 1)
         except EOFError:
-            return frame_num, frame_num / duration * 1000
+            return {
+                'gif': gif,
+                'frame_num': frame_num,
+                'avg_fps': frame_num / duration * 1000,
+                'file_size': round(os.path.getsize(gif_path) / 1024, 2)   # in KB
+            }
+
 
 def split_gif_to_images(gif_obj, args):
     if not os.path.exists(args.tmp_frame_dir):
@@ -26,36 +35,32 @@ def split_gif_to_images(gif_obj, args):
     for i, frame in enumerate(ImageSequence.Iterator(gif_obj)):
         frame.save(os.path.join(args.tmp_frame_dir, "frame_{}.png".format(i)))
     
-def add_bar_and_merge_to_gif(args, avg_fps):
+def add_bar_and_merge_to_gif(gif_info, args):
     filenames = [filename for filename in os.listdir(args.tmp_frame_dir)]
     filenames.sort(key = lambda x : int(x.split('frame_')[1].split('.png')[0]))
-    frame_paths = [os.path.join(args.tmp_frame_dir, filename) for  filename in filenames]
+    frame_paths = [os.path.join(args.tmp_frame_dir, filename) for filename in filenames]
     # print(frame_paths)
 
     # # https://stackoverflow.com/a/35943809/10096987
     frames = []
-    for i, filename in enumerate(frame_paths):
-        # imageio.core.util.Image is an ndarray subclass # https://stackoverflow.com/a/50280844/10096987
-        # print(isinstance(imageio.v2.imread(filename), np.ndarray))  # True
-        imageio_img = imageio.v2.imread(filename)  # RGB format https://github.com/imageio/imageio/issues/345#event-1644137811
-        # print(imageio_img.shape) # (height, width, 4), the 4th channel is alpha
-        
-        # 1. discard the 4th alpha channel. 2. convert RBG to BGR. 3. copy to a new object (otherwise `Overload resolution failed:` will be invoked)
-        cv2_img = imageio_img[:, :, :3][:, :, ::-1].copy()
+    for i, frame_path in enumerate(frame_paths):
+        cv2_img = cv2.imread(frame_path)
         height, width, _ = cv2_img.shape
         
         bar_height = int(args.bar_height_ratio * height)
-        bar_width = int(((i + 1) / frame_num) * width)
-        cv2.rectangle(cv2_img, (0, height - bar_height), (bar_width, height), color=(0, 0, 255), thickness=-1)
-
+        bar_width = int(((i + 1) / gif_info['frame_num']) * width)
+        cv2.rectangle(cv2_img, (0, height - bar_height), (bar_width, height), color=args.bar_color, thickness=-1)
+        
+        # imageio.core.util.Image is an ndarray subclass # https://stackoverflow.com/a/50280844/10096987
         imageio_img_new = cv2_img[:, :, ::-1].copy()  # convert from BGR back to RGB
         frames.append(imageio_img_new)
-        
-    output_gif_path = args.output_gif_path
-    if not output_gif_path:
-        output_gif_path = args.input_gif_path.split('.gif')[0] + '_res.gif'
-    imageio.mimsave(output_gif_path, frames, fps=avg_fps)
+
+    imageio.mimsave(args.output_gif_path, frames, fps=gif_info['avg_fps'])
     shutil.rmtree(args.tmp_frame_dir)
+
+def optimize_gif(gif_path, expected_size):
+    
+    pass
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -71,10 +76,37 @@ def parse_args():
     
 if __name__ == "__main__":
     args = parse_args()
-    # print(args)
+    if not args.output_gif_path:
+        args.output_gif_path = args.input_gif_path.split('.gif')[0] + '_res.gif'
 
-    gif = Image.open(args.input_gif_path)
-    frame_num, avg_fps = analyze_gif(gif)
+    gif_info = analyze_gif(args.input_gif_path)
+    # print(gif_info)
     
-    split_gif_to_images(gif, args)
-    add_bar_and_merge_to_gif(args, avg_fps)
+    split_gif_to_images(gif_info['gif'], args)
+    add_bar_and_merge_to_gif(gif_info, args)
+    
+    print(" ===== out info: =====\n - progress bar added successfully!")
+    out_gif_info = analyze_gif(args.output_gif_path)
+    print(" - input gif size: {} KB, output size {} KB. \nWould you like to optimize for smaller size? [Y/N]".format(
+        gif_info['file_size'], out_gif_info['file_size'])
+    )
+    optimize = input()
+    if optimize == "Y":
+        # https://imageio.readthedocs.io/en/stable/examples.html#optimizing-a-gif-using-pygifsicle
+        from pygifsicle import optimize
+        os.environ["gifsicle"] = "gifsicle.exe"
+        # print("What is your expected size? [in KB]")
+        # expected_size = float(input())
+        optimize(args.output_gif_path)
+        opt_out_gif_info = analyze_gif(args.output_gif_path)
+        print(" - optimize done! the optimzed size is {} KB, which is {} smaller.".format(
+            opt_out_gif_info['file_size'], round(opt_out_gif_info['file_size'] / out_gif_info['file_size'], 2))
+        )
+        
+        
+        
+    
+    
+    
+    
+    
