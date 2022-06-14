@@ -1,7 +1,6 @@
-# God knows I will use all of PIL.Image, imageio and cv2 ...
+# God knows I will use all of PIL, imageio and cv2 ...
 
 import os
-import sys
 import argparse
 import shutil
 import cv2
