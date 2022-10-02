@@ -7,10 +7,11 @@ import shutil
 import cv2
 from PIL import Image, ImageSequence
 import imageio
-
+from tqdm import tqdm
 
 # https://stackoverflow.com/a/53365469/10096987
 def analyze_gif(gif_path):
+    print("analyzing gif...")
     gif = Image.open(gif_path)
     
     gif.seek(0)
@@ -29,19 +30,25 @@ def analyze_gif(gif_path):
             }
 
 
-def split_gif_to_images(gif_obj, args):
+def split_gif_to_images(gif_info, args):
+    print("spliting gif to images...")
     if not os.path.exists(args.tmp_frame_dir):
         os.mkdir(args.tmp_frame_dir)
-    for i, frame in enumerate(ImageSequence.Iterator(gif_obj)):
+    pbar = tqdm(total=gif_info['frame_num'])
+    for i, frame in enumerate(ImageSequence.Iterator(gif_info['gif'])):
         frame.save(os.path.join(args.tmp_frame_dir, "frame_{}.png".format(i)))
+        pbar.update()
+    pbar.close()
     
 def add_bar_and_merge_to_gif(gif_info, args):
+    print("adding bar and merging to gif...")
     filenames = [filename for filename in os.listdir(args.tmp_frame_dir)]
     filenames.sort(key = lambda x : int(x.split('frame_')[1].split('.png')[0]))
     frame_paths = [os.path.join(args.tmp_frame_dir, filename) for filename in filenames]
     # print(frame_paths)
 
     # # https://stackoverflow.com/a/35943809/10096987
+    pbar = tqdm(total=gif_info['frame_num'])
     frames = []
     for i, frame_path in enumerate(frame_paths):
         cv2_img = cv2.imread(frame_path)
@@ -54,6 +61,8 @@ def add_bar_and_merge_to_gif(gif_info, args):
         # imageio.core.util.Image is an ndarray subclass # https://stackoverflow.com/a/50280844/10096987
         imageio_img_new = cv2_img[:, :, ::-1].copy()  # convert from BGR back to RGB
         frames.append(imageio_img_new)
+        pbar.update()
+    pbar.close()
 
     imageio.mimsave(args.output_gif_path, frames, fps=gif_info['avg_fps'])
     shutil.rmtree(args.tmp_frame_dir)
@@ -99,7 +108,7 @@ if __name__ == "__main__":
 
     gif_info = analyze_gif(args.input_gif_path)
 
-    split_gif_to_images(gif_info['gif'], args)
+    split_gif_to_images(gif_info, args)
     add_bar_and_merge_to_gif(gif_info, args)
     
     print(" ===== out info: =====\n - progress bar added successfully!")
@@ -144,3 +153,7 @@ if __name__ == "__main__":
                 break
                 
             lossiness += 10
+    elif optimize == "N":
+        pass
+    else:
+        optimize = input()
